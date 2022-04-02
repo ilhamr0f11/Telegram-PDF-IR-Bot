@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from logbook import Logger
+from loguru import logger
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -23,8 +23,8 @@ from telegram.ext.dispatcher import Dispatcher
 
 from pdf_bot.commands import (
     compare_cov_handler,
+    image_cov_handler,
     merge_cov_handler,
-    photo_cov_handler,
     text_cov_handler,
     watermark_cov_handler,
 )
@@ -38,12 +38,11 @@ from pdf_bot.payment import (
     send_support_options,
     successful_payment,
 )
-from pdf_bot.stats import get_stats
 from pdf_bot.store import create_user
 from pdf_bot.url import url_to_pdf
 
 load_dotenv()
-DEV_TELE_ID = int(os.environ.get("DEV_TELE_ID"))
+ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID")
 CALLBACK_DATA = "callback_data"
 
 
@@ -74,7 +73,7 @@ def setup_dispatcher(dispatcher: Dispatcher):
     # PDF commands handlers
     dispatcher.add_handler(compare_cov_handler())
     dispatcher.add_handler(merge_cov_handler())
-    dispatcher.add_handler(photo_cov_handler())
+    dispatcher.add_handler(image_cov_handler())
     dispatcher.add_handler(text_cov_handler())
     dispatcher.add_handler(watermark_cov_handler())
 
@@ -84,11 +83,11 @@ def setup_dispatcher(dispatcher: Dispatcher):
     # Feedback handler
     dispatcher.add_handler(feedback_cov_handler())
 
-    # Dev commands handlers
-    dispatcher.add_handler(CommandHandler("send", send_msg, Filters.user(DEV_TELE_ID)))
-    dispatcher.add_handler(
-        CommandHandler("stats", get_stats, Filters.user(DEV_TELE_ID))
-    )
+    # Admin commands handlers
+    if ADMIN_TELEGRAM_ID is not None:
+        dispatcher.add_handler(
+            CommandHandler("send", send_msg, Filters.user(int(ADMIN_TELEGRAM_ID)))
+        )
 
     # Log all errors
     dispatcher.add_error_handler(error_callback)
@@ -144,24 +143,24 @@ def help_msg(update, context):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     update.effective_message.reply_text(
-        "{desc_1}\n{pdf_files}\n{photos}\n{webpage_links}\n\n{desc_2}\n"
-        "{compare_desc}\n{merge_desc}\n{photo_desc}\n{text_desc}\n"
+        "{desc_1}\n{pdf_files}\n{images}\n{webpage_links}\n\n{desc_2}\n"
+        "{compare_desc}\n{merge_desc}\n{image_desc}\n{text_desc}\n"
         "{watermark_desc}".format(
             desc_1=_(
                 "You can perform most of the tasks by sending me one of the followings:"
             ),
             pdf_files=_("- PDF files"),
-            photos=_("- Photos"),
+            images=_("- Images"),
             webpage_links=_("- Webpage links"),
             desc_2=_(
-                "The rest of the tasks can be performed"
-                " by using the following commands:"
+                "The rest of the tasks can be performed by using the following "
+                "commands:"
             ),
             compare_desc=_("{command} - compare PDF files").format(command="/compare"),
             merge_desc=_("{command} - merge PDF files").format(command="/merge"),
-            photo_desc=_(
-                "{command} - convert and combine multiple photos into PDF files"
-            ).format(command="/photo"),
+            image_desc=_(
+                "{command} - convert and combine multiple images into PDF files"
+            ).format(command="/image"),
             text_desc=_("{command} - create PDF files from text messages").format(
                 command="/text"
             ),
@@ -209,6 +208,9 @@ def send_msg(update: Update, context: CallbackContext):
 
 
 def error_callback(update: Update, context: CallbackContext):
-    if context.error is not Unauthorized:
-        log = Logger()
-        log.error(f'Update "{update}" caused error "{context.error}"')
+    try:
+        raise context.error
+    except Unauthorized:
+        pass
+    except Exception:  # pylint: disable=broad-except
+        logger.exception(f'Update "{update}" caused error')

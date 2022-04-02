@@ -1,26 +1,21 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:base"],
   "labels": ["dependencies"],
   "semanticCommits": "enabled",
-  "stabilityDays": 3,
-  "prCreation": "not-pending",
   "schedule": ["after 6pm every weekday", "every weekend"],
   "timezone": "Australia/Sydney",
-  "pip_requirements": {
-    "fileMatch": ["^([\\w-]*)requirements([-\\w]*)\\.(txt|pip)$"]
-  },
-  "pre-commit": {
-    "enabled": true
-  },
   "packageRules": [
     {
       "groupName": "GitHub Actions Dependencies",
-      "semanticCommitType": "ci",
-      "matchPaths": [".github/workflows/*.yml"]
+      "matchPaths": [".github/workflows/*.yml"],
+      "addLabels": ["ci"]
     },
     {
-      "groupName": "Pre-Commit Dependencies",
-      "matchPaths": [".pre-commit-config.yaml", "requirements-dev.txt"]
+      "groupName": "Python",
+      "matchPaths": [".python-version", "Dockerfile"],
+      "matchPackageNames": ["python"],
+      "semanticCommitScope": "python"
     }
   ]
 }

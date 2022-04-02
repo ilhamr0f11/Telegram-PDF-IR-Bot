@@ -1,0 +1,92 @@
+name: GitHub Actions
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  test-image:
+    name: Test Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v3
+
+      - name: Test image 🧪
+        run: docker build .
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v3
+
+      - name: Setup Python 🐍
+        id: setup-python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.9.7"
+
+      - name: Install Poetry 📦
+        uses: snok/install-poetry@v1.3.1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache virtual environment 💾
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-${{ steps.setup-python.outputs.python-version }}-
+
+      - name: Install dependencies ⚙️
+        run: poetry install --no-interaction --no-root
+
+      - name: Run linting 🧪
+        run: |
+          source .venv/bin/activate
+          pre-commit run --all-files
+
+  deploy-stg:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [test-image, lint]
+    if: ${{ github.ref == 'refs/heads/master' }}
+    environment:
+      name: Staging
+    env:
+      GCP_IMAGE: ${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_SERVICE_NAME }}:${{ github.sha }}
+
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v3
+
+      - name: Authenticate to Google Cloud 🔐
+        uses: google-github-actions/auth@v0.6.0
+        with:
+          credentials_json: "${{ secrets.GCP_SA_KEY }}"
+
+      - name: Setup Google Cloud ⚙️
+        uses: google-github-actions/setup-gcloud@v0.6.0
+
+      - name: Authorize Docker push 🚢
+        run: gcloud auth configure-docker
+
+      - name: Build and push image 🏗
+        run: |-
+          docker build -t gcr.io/${{ env.GCP_IMAGE }} .
+          docker push gcr.io/${{ env.GCP_IMAGE }}
+
+      - name: Deploy 🚀
+        uses: google-github-actions/deploy-cloudrun@v0.9.0
+        with:
+          service: ${{ secrets.GCP_SERVICE_NAME }}
+          image: gcr.io/${{ env.GCP_IMAGE }}
+          region: ${{ secrets.GCP_REGION }}

@@ -14,14 +14,15 @@ from telegram.ext import (
 )
 from telegram.parsemode import ParseMode
 from weasyprint import CSS, HTML
-from weasyprint.fonts import FontConfiguration
+from weasyprint.text.fonts import FontConfiguration
 
+from pdf_bot.analytics import TaskType
 from pdf_bot.consts import CANCEL, TEXT_FILTER
 from pdf_bot.language import set_lang
 from pdf_bot.utils import cancel, check_user_data, send_result_file
 
 load_dotenv()
-GOOGLE_FONTS_API_KEY = os.environ.get("GOOGLE_FONTS_API_KEY")
+GOOGLE_FONTS_TOKEN = os.environ.get("GOOGLE_FONTS_TOKEN")
 
 WAIT_TEXT = 0
 WAIT_FONT = 1
@@ -125,7 +126,7 @@ def get_font(font: str) -> Tuple[str, str]:
     font_url: str = None
 
     r = requests.get(
-        f"https://www.googleapis.com/webfonts/v1/webfonts?key={GOOGLE_FONTS_API_KEY}"
+        f"https://www.googleapis.com/webfonts/v1/webfonts?key={GOOGLE_FONTS_TOKEN}"
     )
     if r.status_code == 200:
         font = font.lower()
@@ -174,6 +175,6 @@ def text_to_pdf(
     with tempfile.TemporaryDirectory() as dir_name:
         out_fn = os.path.join(dir_name, "Text.pdf")
         html.write_pdf(out_fn, stylesheets=stylesheets, font_config=font_config)
-        send_result_file(update, context, out_fn, "text")
+        send_result_file(update, context, out_fn, TaskType.text_to_pdf)
 
     return ConversationHandler.END
